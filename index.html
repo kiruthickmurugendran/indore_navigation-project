@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ASK ACET - Indoor Navigation</title>
+
+  <!-- Include Leaflet CSS and JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- Include Leaflet Routing Machine CSS and JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { height: 100vh; width: 100%; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    #controls input {
+      padding: 5px;
+      width: 250px;
+    }
+    #instructions {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 300px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      overflow-y: auto;
+      max-height: 300px;
+      font-size: 14px;
+      z-index: 1000;
+    }
+    #view3D {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    #view3D:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="controls">
+    <input type="text" id="search" placeholder="Search for a classroom..." list="classrooms" />
+    <datalist id="classrooms">
+      <option value="Conference Hall - 2"></option>
+      <option value="C101"></option>
+      <option value="C102"></option>
+      <option value="C103"></option>
+      <option value="C201"></option>
+      <option value="C202"></option>
+      <option value="C203"></option>
+      <option value="C204"></option>
+      <option value="C305"></option>
+      <option value="Physics Lab"></option>
+    </datalist>
+  </div>
+
+  <div id="map"></div>
+  <div id="instructions"><b>Navigation Instructions:</b><br><span id="instructionList">Search for a classroom to get directions...</span></div>
+
+  <!-- Button to view 3D model -->
+  <button id="view3D">View 3D Model</button>
+
+  <script>
+    // Initialize Leaflet map with satellite view
+    const map = L.map('map').setView([10.809256, 77.010918], 17);
+
+    // Use MapTiler Satellite style for the map
+    L.tileLayer(' https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=5aYLFbPW4Qb2qE8HqxGC ', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors & MapTiler',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Predefined coordinates for indoor classrooms with floor details
+    const classrooms = {
+      "Conference Hall - 2": { lat: 10.809659, lng: 77.010935, floor: "Ground Floor" },
+      "C101": { lat: 10.809663, lng: 77.010907, floor: "First Floor" },
+      "C102": { lat: 10.809648, lng: 77.010814, floor: "First Floor" },
+      "C103": { lat: 10.809634, lng: 77.010737, floor: "First Floor" },
+      "C201": { lat: 10.809671, lng: 77.010934, floor: "Second Floor" },
+      "C202": { lat: 10.809677, lng: 77.010880, floor: "Second Floor" },
+      "C203": { lat: 10.809655, lng: 77.010829, floor: "Second Floor" },
+      "C204": { lat: 10.809644, lng: 77.010738, floor: "Second Floor" },
+      "C305": { lat: 10.809649, lng: 77.010733, floor: "Third Floor" },
+      "Physics Lab": { lat: 10.809650, lng: 77.010807, floor: "Third Floor" }
+    };
+
+    // Event listener for the "View 3D Model" button
+    document.getElementById('view3D').addEventListener('click', function () {
+      window.open('3d-model.html', '_blank');
+    });
+
+    // Initialize the routing control
+    let routingControl = null;
+
+    // Function to search for a classroom and navigate
+    function searchClassroom(query, userLocation) {
+      const classroom = classrooms[query];
+      if (classroom) {
+        if (routingControl) {
+          map.removeControl(routingControl);
+        }
+
+        routingControl = L.Routing.control({
+          waypoints: [
+            L.latLng(userLocation.lat, userLocation.lng),
+            L.latLng(classroom.lat, classroom.lng)
+          ],
+          lineOptions: {
+            styles: [{ color: 'blue', opacity: 0.7, weight: 5 }]
+          },
+          createMarker: function () { return null; },
+          routeWhileDragging: false,
+          show: false
+        }).addTo(map);
+
+        routingControl.on('routesfound', function (e) {
+          const instructions = e.routes[0].instructions;
+          let instructionText = instructions.map(step => `${step.text} (${step.distance} meters)`).join('<br>');
+          instructionText += `<br><b>Destination Floor: </b>${classroom.floor}`;
+          document.getElementById('instructionList').innerHTML = instructionText;
+        });
+
+        map.fitBounds([[userLocation.lat, userLocation.lng], [classroom.lat, classroom.lng]]);
+      } else {
+        alert("Classroom not found. Please try again.");
+        document.getElementById('instructionList').innerHTML = 'Classroom not found. Try another search.';
+      }
+    }
+
+    // Get user's current location
+    function getUserLocation() {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+
+          L.marker([userLocation.lat, userLocation.lng])
+            .addTo(map)
+            .bindPopup("Your Location")
+            .openPopup();
+
+          document.getElementById('search').addEventListener('change', function (event) {
+            searchClassroom(event.target.value, userLocation);
+          });
+        },
+        (error) => {
+          alert("Unable to access your location.");
+          console.error(error);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+
+    getUserLocation();
+  </script>
+
+</body>
+</html>
